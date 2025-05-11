@@ -1,4 +1,5 @@
 import React from "react";
+import { PenTool, Pen, pencil, Highlighter, Pencil } from "lucide-react";
 
 interface BrushControlsProps {
   lineWidth: number;
@@ -60,19 +61,41 @@ const BrushControls: React.FC<BrushControlsProps> = ({
             {Math.round(opacity * 100)}%
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">0%</span>
-          <input
-            id="opacity"
-            type="range"
-            min="0.1"
-            max="1"
-            step="0.01"
-            value={opacity}
-            onChange={(e) => onOpacityChange(Number(e.target.value))}
-            className="w-full h-2 bg-[#3A3A3A] rounded-lg appearance-none cursor-pointer"
-          />
-          <span className="text-xs text-gray-400">100%</span>
+        <div className="flex items-center justify-center gap-2">
+          <div className="flex justify-between gap-2">
+            <button
+              onClick={() => onOpacityChange(1)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-sm text-white hover:bg-[#4A4A4A] ${
+          opacity === 1 ? "bg-[#5A5A5A]" : "bg-[#3A3A3A]"
+              }`}
+            >
+              <PenTool className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => onOpacityChange(0.8)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-sm text-white hover:bg-[#4A4A4A] ${
+          opacity === 0.8 ? "bg-[#5A5A5A]" : "bg-[#3A3A3A]"
+              }`}
+            >
+              <Pen className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => onOpacityChange(0.65)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-sm text-white hover:bg-[#4A4A4A] ${
+          opacity === 0.65 ? "bg-[#5A5A5A]" : "bg-[#3A3A3A]"
+              }`}
+            >
+              <Pencil className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => onOpacityChange(0.3)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-sm text-white hover:bg-[#4A4A4A] ${
+          opacity === 0.3 ? "bg-[#5A5A5A]" : "bg-[#3A3A3A]"
+              }`}
+            >
+              <Highlighter className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <div className="mt-1 flex items-center justify-center h-6">
           <div
