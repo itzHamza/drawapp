@@ -5,7 +5,7 @@ import PDFViewer from "./components/pdfv";
 function App() {
   return (
     <div className="min-h-screen bg-gray-100">
-      <PDFViewer />
+      <DrawingApp />
     </div>
   );
 }
