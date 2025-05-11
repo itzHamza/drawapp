@@ -3,7 +3,7 @@ import ColorPicker from "./ColorPicker";
 import BrushControls from "./BrushControls";
 import ToolBar from "./ToolBar";
 import PdfAsHtmlViewer from "./PdfAsHtmlViewer";
-import { DrawingHistory } from "../types/drawing";
+import { DrawingHistory, Line } from "../types/drawing";
 import { ChevronDown } from "lucide-react";
 
 const DrawingApp: React.FC = () => {
@@ -14,6 +14,10 @@ const DrawingApp: React.FC = () => {
   const [history, setHistory] = useState<DrawingHistory>([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState<number>(-1);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  // Add a state variable to track the chronological order of strokes across pages
+  const [chronologicalHistory, setChronologicalHistory] = useState<
+    { lineId: number; pageNumber: number }[]
+  >([]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -30,17 +34,39 @@ const DrawingApp: React.FC = () => {
   const handleClearCanvas = () => {
     setHistory([]);
     setCurrentHistoryIndex(-1);
+    setChronologicalHistory([]);
   };
 
   const handleUndo = () => {
     if (currentHistoryIndex >= 0) {
       setCurrentHistoryIndex(currentHistoryIndex - 1);
+
+      // Remove the last item from the chronological history
+      if (chronologicalHistory.length > 0) {
+        setChronologicalHistory((prev) => prev.slice(0, -1));
+      }
     }
   };
 
   const handleRedo = () => {
     if (currentHistoryIndex < history.length - 1) {
       setCurrentHistoryIndex(currentHistoryIndex + 1);
+
+      // Add the next redone item to chronological history
+      const nextLine = history[currentHistoryIndex + 1];
+      if (
+        nextLine &&
+        nextLine.id !== undefined &&
+        nextLine.pageNumber !== undefined
+      ) {
+        setChronologicalHistory((prev) => [
+          ...prev,
+          {
+            lineId: nextLine.id,
+            pageNumber: nextLine.pageNumber,
+          },
+        ]);
+      }
     }
   };
 
@@ -66,6 +92,19 @@ const DrawingApp: React.FC = () => {
       return "cursor-default";
     }
     return "cursor-crosshair";
+  };
+
+  // Handler to add new lines to chronological history
+  const handleLineAdded = (line: Line) => {
+    if (line.id !== undefined && line.pageNumber !== undefined) {
+      setChronologicalHistory((prev) => [
+        ...prev,
+        {
+          lineId: line.id,
+          pageNumber: line.pageNumber,
+        },
+      ]);
+    }
   };
 
   return (
@@ -164,6 +203,8 @@ const DrawingApp: React.FC = () => {
           setCurrentHistoryIndex={setCurrentHistoryIndex}
           isDrawingEnabled={mode !== "cursor"}
           cursorStyle={getCursorStyle()}
+          chronologicalHistory={chronologicalHistory}
+          onLineAdded={handleLineAdded}
         />
       </main>
     </div>

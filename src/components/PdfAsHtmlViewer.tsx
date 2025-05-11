@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import Canvas from "./Canvas";
-import { DrawingHistory } from "../types/drawing";
+import { DrawingHistory, Line } from "../types/drawing";
 
 interface PdfAsHtmlViewerProps {
   url: string;
@@ -16,6 +16,10 @@ interface PdfAsHtmlViewerProps {
   setCurrentHistoryIndex: React.Dispatch<React.SetStateAction<number>>;
   isDrawingEnabled: boolean;
   cursorStyle: string;
+  // Add chronological history prop
+  chronologicalHistory: { lineId: number; pageNumber: number }[];
+  // Add callback for when a new line is added
+  onLineAdded: (line: Line) => void;
 }
 
 export default function PdfAsHtmlViewer({
@@ -27,6 +31,8 @@ export default function PdfAsHtmlViewer({
   setCurrentHistoryIndex,
   isDrawingEnabled,
   cursorStyle,
+  chronologicalHistory,
+  onLineAdded,
 }: PdfAsHtmlViewerProps) {
   const [html, setHtml] = useState<string | null>(null);
   const [pageRects, setPageRects] = useState<(DOMRect | null)[]>([]);
@@ -128,6 +134,8 @@ export default function PdfAsHtmlViewer({
             cursorStyle={cursorStyle}
             pageNumber={index}
             pageRect={rect}
+            chronologicalHistory={chronologicalHistory}
+            onLineAdded={onLineAdded}
           />
         </div>
       ))}

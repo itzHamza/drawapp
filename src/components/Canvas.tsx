@@ -11,7 +11,13 @@ interface CanvasProps {
   cursorStyle: string;
   pageNumber: number;
   pageRect: DOMRect | null;
+  // Add chronological history prop
+  chronologicalHistory: { lineId: number; pageNumber: number }[];
+  // Add callback for when a new line is added
+  onLineAdded: (line: Line) => void;
 }
+
+let nextLineId = 0;
 
 const Canvas: React.FC<CanvasProps> = ({
   settings,
@@ -23,6 +29,8 @@ const Canvas: React.FC<CanvasProps> = ({
   cursorStyle,
   pageNumber,
   pageRect,
+  chronologicalHistory,
+  onLineAdded,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -32,6 +40,7 @@ const Canvas: React.FC<CanvasProps> = ({
     lineWidth: settings.lineWidth,
     opacity: settings.opacity,
     isEraser: settings.isEraser,
+    id: -1, // This will be assigned when drawing ends
   });
 
   // Redraw canvas when history changes or current history index changes
@@ -44,12 +53,15 @@ const Canvas: React.FC<CanvasProps> = ({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Filter history for this specific page
-    const pageHistory = history.filter(
-      (line) => line.pageNumber === pageNumber
-    );
+    // Use chronological history to determine which lines should be drawn for this page
+    const linesToDraw = chronologicalHistory
+      .filter((item) => item.pageNumber === pageNumber)
+      .map((item) => {
+        return history.find((line) => line.id === item.lineId);
+      })
+      .filter((line) => line !== undefined) as Line[];
 
-    pageHistory.slice(0, currentHistoryIndex + 1).forEach((line) => {
+    linesToDraw.forEach((line) => {
       if (line.points.length < 2) return;
 
       ctx.beginPath();
@@ -77,7 +89,13 @@ const Canvas: React.FC<CanvasProps> = ({
 
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
-  }, [history, currentHistoryIndex, pageRect, pageNumber]);
+  }, [
+    history,
+    currentHistoryIndex,
+    pageRect,
+    pageNumber,
+    chronologicalHistory,
+  ]);
 
   // Update canvas size when page rect changes
   useEffect(() => {
@@ -87,46 +105,8 @@ const Canvas: React.FC<CanvasProps> = ({
     canvas.width = pageRect.width;
     canvas.height = pageRect.height;
 
-    // Redraw after resize
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Filter history for this specific page
-    const pageHistory = history.filter(
-      (line) => line.pageNumber === pageNumber
-    );
-
-    pageHistory.slice(0, currentHistoryIndex + 1).forEach((line) => {
-      if (line.points.length < 2) return;
-
-      ctx.beginPath();
-      ctx.moveTo(line.points[0].x, line.points[0].y);
-
-      for (let i = 1; i < line.points.length; i++) {
-        ctx.lineTo(line.points[i].x, line.points[i].y);
-      }
-
-      if (line.isEraser) {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.strokeStyle = "rgba(0,0,0,1)";
-        ctx.globalAlpha = 1;
-      } else {
-        ctx.globalCompositeOperation = "source-over";
-        ctx.strokeStyle = line.color;
-        ctx.globalAlpha = line.opacity;
-      }
-
-      ctx.lineWidth = line.lineWidth;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.stroke();
-    });
-
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = "source-over";
-  }, [pageRect, history, currentHistoryIndex, pageNumber]);
+    // Redraw after resize - handled by the other useEffect
+  }, [pageRect]);
 
   const getCanvasPoint = (
     e: React.MouseEvent | React.TouchEvent
@@ -169,6 +149,7 @@ const Canvas: React.FC<CanvasProps> = ({
       opacity: settings.opacity,
       isEraser: settings.isEraser,
       pageNumber: pageNumber, // Store page number with line
+      id: -1, // This will be assigned when drawing ends
     });
   };
 
@@ -227,8 +208,17 @@ const Canvas: React.FC<CanvasProps> = ({
     setIsDrawing(false);
 
     if (currentLine.points.length > 1) {
-      setHistory((prevHistory) => [...prevHistory, currentLine]);
+      const lineId = nextLineId++;
+      const newLine = {
+        ...currentLine,
+        id: lineId,
+      };
+
+      setHistory((prevHistory) => [...prevHistory, newLine]);
       setCurrentHistoryIndex((prevIndex) => prevIndex + 1);
+
+      // Notify parent component about the new line
+      onLineAdded(newLine);
     }
   };
 

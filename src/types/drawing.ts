@@ -18,7 +18,8 @@ export interface Line {
   lineWidth: number;
   opacity: number;
   isEraser: boolean;
-  pageNumber?: number; // Added page number to track which page the line belongs to
+  pageNumber?: number; // Page number the line belongs to
+  id?: number; // Unique identifier for the line
 }
 
 export type DrawingHistory = Line[];
@@ -26,4 +27,10 @@ export type DrawingHistory = Line[];
 export interface PageDrawingState {
   history: DrawingHistory;
   currentHistoryIndex: number;
+}
+
+// Track the order of lines across all pages
+export interface ChronologicalLineRef {
+  lineId: number;
+  pageNumber: number;
 }
