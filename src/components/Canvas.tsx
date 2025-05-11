@@ -9,6 +9,8 @@ interface CanvasProps {
   setCurrentHistoryIndex: React.Dispatch<React.SetStateAction<number>>;
   isDrawingEnabled: boolean;
   cursorStyle: string;
+  pageNumber: number;
+  pageRect: DOMRect | null;
 }
 
 const Canvas: React.FC<CanvasProps> = ({
@@ -19,6 +21,8 @@ const Canvas: React.FC<CanvasProps> = ({
   setCurrentHistoryIndex,
   isDrawingEnabled,
   cursorStyle,
+  pageNumber,
+  pageRect,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -30,16 +34,22 @@ const Canvas: React.FC<CanvasProps> = ({
     isEraser: settings.isEraser,
   });
 
+  // Redraw canvas when history changes or current history index changes
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !pageRect) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    history.slice(0, currentHistoryIndex + 1).forEach((line) => {
+    // Filter history for this specific page
+    const pageHistory = history.filter(
+      (line) => line.pageNumber === pageNumber
+    );
+
+    pageHistory.slice(0, currentHistoryIndex + 1).forEach((line) => {
       if (line.points.length < 2) return;
 
       ctx.beginPath();
@@ -67,63 +77,56 @@ const Canvas: React.FC<CanvasProps> = ({
 
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
-  }, [history, currentHistoryIndex]);
+  }, [history, currentHistoryIndex, pageRect, pageNumber]);
 
+  // Update canvas size when page rect changes
   useEffect(() => {
-    const resizeCanvas = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+    const canvas = canvasRef.current;
+    if (!canvas || !pageRect) return;
 
-      const container = canvas.parentElement;
-      if (!container) return;
+    canvas.width = pageRect.width;
+    canvas.height = pageRect.height;
 
-      const { width, height } = container.getBoundingClientRect();
+    // Redraw after resize
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-      canvas.width = width;
-      canvas.height = height;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+    // Filter history for this specific page
+    const pageHistory = history.filter(
+      (line) => line.pageNumber === pageNumber
+    );
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    pageHistory.slice(0, currentHistoryIndex + 1).forEach((line) => {
+      if (line.points.length < 2) return;
 
-      history.slice(0, currentHistoryIndex + 1).forEach((line) => {
-        if (line.points.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(line.points[0].x, line.points[0].y);
 
-        ctx.beginPath();
-        ctx.moveTo(line.points[0].x, line.points[0].y);
+      for (let i = 1; i < line.points.length; i++) {
+        ctx.lineTo(line.points[i].x, line.points[i].y);
+      }
 
-        for (let i = 1; i < line.points.length; i++) {
-          ctx.lineTo(line.points[i].x, line.points[i].y);
-        }
+      if (line.isEraser) {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = line.color;
+        ctx.globalAlpha = line.opacity;
+      }
 
-        if (line.isEraser) {
-          ctx.globalCompositeOperation = "destination-out";
-          ctx.strokeStyle = "rgba(0,0,0,1)";
-          ctx.globalAlpha = 1;
-        } else {
-          ctx.globalCompositeOperation = "source-over";
-          ctx.strokeStyle = line.color;
-          ctx.globalAlpha = line.opacity;
-        }
+      ctx.lineWidth = line.lineWidth;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    });
 
-        ctx.lineWidth = line.lineWidth;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
-      });
-
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = "source-over";
-    };
-
-    resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
-
-    return () => {
-      window.removeEventListener("resize", resizeCanvas);
-    };
-  }, [history, currentHistoryIndex]);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+  }, [pageRect, history, currentHistoryIndex, pageNumber]);
 
   const getCanvasPoint = (
     e: React.MouseEvent | React.TouchEvent
@@ -165,6 +168,7 @@ const Canvas: React.FC<CanvasProps> = ({
       lineWidth: settings.lineWidth,
       opacity: settings.opacity,
       isEraser: settings.isEraser,
+      pageNumber: pageNumber, // Store page number with line
     });
   };
 
@@ -231,7 +235,7 @@ const Canvas: React.FC<CanvasProps> = ({
   return (
     <canvas
       ref={canvasRef}
-      className={`w-full h-full border border-gray-200 rounded-lg bg-transparent ${cursorStyle} ${
+      className={`absolute top-0 left-0 w-full h-full bg-transparent ${cursorStyle} ${
         isDrawingEnabled ? "pointer-events-auto" : "pointer-events-none"
       }`}
       onMouseDown={handleStartDrawing}

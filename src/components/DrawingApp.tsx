@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import Canvas from "./Canvas";
+import React, { useState, useEffect } from "react";
 import ColorPicker from "./ColorPicker";
 import BrushControls from "./BrushControls";
 import ToolBar from "./ToolBar";
@@ -15,6 +14,18 @@ const DrawingApp: React.FC = () => {
   const [history, setHistory] = useState<DrawingHistory>([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState<number>(-1);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setActiveDropdown(null);
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, []);
 
   const handleClearCanvas = () => {
     setHistory([]);
@@ -58,8 +69,8 @@ const DrawingApp: React.FC = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-transparent absolute w-full">
-      <header className="bg-[#2A2A2A] text-white z-50">
+    <div className="flex flex-col min-h-screen bg-transparent">
+      <header className="bg-[#2A2A2A] text-white z-50 sticky top-0 left-0 right-0">
         <div className="flex items-center h-12 px-4">
           <h1 className="text-lg font-semibold mr-8">TBiB PDF</h1>
 
@@ -138,32 +149,22 @@ const DrawingApp: React.FC = () => {
         </div>
       </header>
 
-      <main
-        className="flex-1 relative overflow-hidden"
-        onClick={() => setActiveDropdown(null)}
-      >
-        {/* PDF Content Layer */}
-        <div className="absolute inset-0">
-          <PdfAsHtmlViewer url="./Document.html" />
-        </div>
-
-        {/* Canvas Layer */}
-        <div className="absolute inset-0 pointer-events-none">
-          <Canvas
-            settings={{
-              color,
-              lineWidth,
-              opacity: getEffectiveOpacity(),
-              isEraser: mode === "eraser",
-            }}
-            history={history}
-            setHistory={setHistory}
-            currentHistoryIndex={currentHistoryIndex}
-            setCurrentHistoryIndex={setCurrentHistoryIndex}
-            isDrawingEnabled={mode !== "cursor"}
-            cursorStyle={getCursorStyle()}
-          />
-        </div>
+      <main className="flex-1 relative" onClick={() => setActiveDropdown(null)}>
+        <PdfAsHtmlViewer
+          url="./Document.html"
+          settings={{
+            color,
+            lineWidth,
+            opacity: getEffectiveOpacity(),
+            isEraser: mode === "eraser",
+          }}
+          history={history}
+          setHistory={setHistory}
+          currentHistoryIndex={currentHistoryIndex}
+          setCurrentHistoryIndex={setCurrentHistoryIndex}
+          isDrawingEnabled={mode !== "cursor"}
+          cursorStyle={getCursorStyle()}
+        />
       </main>
     </div>
   );

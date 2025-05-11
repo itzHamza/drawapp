@@ -18,6 +18,7 @@ export interface Line {
   lineWidth: number;
   opacity: number;
   isEraser: boolean;
+  pageNumber?: number; // Added page number to track which page the line belongs to
 }
 
 export type DrawingHistory = Line[];
