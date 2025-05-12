@@ -1,212 +1,185 @@
-import React, { useState, useCallback } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
-import "react-pdf/dist/esm/Page/AnnotationLayer.css";
-import "react-pdf/dist/esm/Page/TextLayer.css";
+// Enhanced React component to fetch and display a PDF as HTML
+import React, { useState, useEffect } from "react";
 
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-
-const PDFViewer = () => {
-  const [numPages, setNumPages] = useState(null);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [pdfFile, setPdfFile] = useState(null);
-  const [pdfUrl, setPdfUrl] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+const PDFViewer = ({ pdfUrl }) => {
+  const [htmlContent, setHtmlContent] = useState("");
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
 
-  const onDocumentLoadSuccess = ({ numPages }) => {
-    setNumPages(numPages);
-    setPageNumber(1);
-    setIsLoading(false);
-  };
+  // Update this to your actual backend URL
+  const BACKEND_URL = "https://pdftohtml-production-c12d.up.railway.app";
 
-  const onDocumentLoadError = (error) => {
-    setError("Failed to load PDF: " + error.message);
-    setIsLoading(false);
-  };
+  useEffect(() => {
+    const convertPdfToHtml = async () => {
+      try {
+        setLoading(true);
+        console.log(`Starting conversion for PDF: ${pdfUrl}`);
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file && file.type === "application/pdf") {
-      setError(null);
-      setIsLoading(true);
-      setPdfUrl("");
-      setPdfFile(file);
-    } else {
-      setError("Please select a valid PDF file");
-    }
-  };
+        // First, fetch the PDF from your storage
+        console.log("Fetching PDF document...");
+        const pdfResponse = await fetch(pdfUrl);
 
-  const handleUrlSubmit = (e) => {
-    e.preventDefault();
+        if (!pdfResponse.ok) {
+          throw new Error(
+            `Failed to fetch PDF: ${pdfResponse.statusText} (${pdfResponse.status})`
+          );
+        }
+
+        console.log("PDF fetch successful, creating blob...");
+        const pdfBlob = await pdfResponse.blob();
+        console.log(
+          `PDF blob created, size: ${pdfBlob.size} bytes, type: ${pdfBlob.type}`
+        );
+
+        // Create form data
+        const formData = new FormData();
+        formData.append("file", pdfBlob, "document.pdf");
+
+        // Send to conversion API
+        console.log(`Sending PDF to conversion API at ${BACKEND_URL}/convert`);
+        const conversionResponse = await fetch(`${BACKEND_URL}/convert`, {
+          method: "POST",
+          body: formData,
+          // No need to set Content-Type with FormData
+        });
+
+        // Save response details for debugging
+        const responseDetails = {
+          status: conversionResponse.status,
+          statusText: conversionResponse.statusText,
+          headers: Object.fromEntries([
+            ...conversionResponse.headers.entries(),
+          ]),
+        };
+
+        console.log("Conversion API response:", responseDetails);
+        setDebugInfo(responseDetails);
+
+        if (!conversionResponse.ok) {
+          let errorDetails = "";
+          // Try to get error details from response
+          try {
+            const errorData = await conversionResponse.json();
+            errorDetails = errorData.error || JSON.stringify(errorData);
+          } catch (e) {
+            // If not JSON, try to get text
+            try {
+              errorDetails = await conversionResponse.text();
+            } catch (e2) {
+              errorDetails = "Could not parse error response";
+            }
+          }
+
+          throw new Error(
+            `Conversion failed (${conversionResponse.status}): ${errorDetails}`
+          );
+        }
+
+        // Get the HTML content
+        console.log("Reading HTML content from response...");
+        const html = await conversionResponse.text();
+        console.log(`Received HTML content, length: ${html.length} characters`);
+        setHtmlContent(html);
+      } catch (err) {
+        console.error("Error converting PDF:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (pdfUrl) {
-      setError(null);
-      setIsLoading(true);
-      setPdfFile(null);
-      // No need to set pdfUrl as it's already set by the input
+      convertPdfToHtml();
+    }
+  }, [pdfUrl]);
+
+  // Try alternative method using direct binary upload
+  const tryAlternativeMethod = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log("Trying alternative conversion method...");
+      const html = await convertPdfUsingBinary(pdfUrl);
+      setHtmlContent(html);
+    } catch (err) {
+      console.error("Alternative method failed:", err);
+      setError(`Both conversion methods failed. Last error: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const goToPrevPage = () => {
-    setPageNumber((prev) => Math.max(prev - 1, 1));
-  };
-
-  const goToNextPage = () => {
-    setPageNumber((prev) => Math.min(prev + 1, numPages));
-  };
-
-  const renderPdf = useCallback(() => {
-    if (pdfFile) {
-      return (
-        <Document
-          file={pdfFile}
-          onLoadSuccess={onDocumentLoadSuccess}
-          onLoadError={onDocumentLoadError}
-          loading={<div>Loading PDF file...</div>}
-        >
-          <Page pageNumber={pageNumber} />
-        </Document>
-      );
-    } else if (pdfUrl) {
-      return (
-        <Document
-          file={pdfUrl}
-          onLoadSuccess={onDocumentLoadSuccess}
-          onLoadError={onDocumentLoadError}
-          loading={<div>Loading PDF from URL...</div>}
-        >
-          <Page pageNumber={pageNumber} />
-        </Document>
-      );
+  // Alternative implementation using raw binary data
+  const convertPdfUsingBinary = async (pdfUrl) => {
+    // Fetch the PDF as ArrayBuffer
+    const pdfResponse = await fetch(pdfUrl);
+    if (!pdfResponse.ok) {
+      throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`);
     }
-    return null;
-  }, [pdfFile, pdfUrl, pageNumber]);
+
+    const pdfBuffer = await pdfResponse.arrayBuffer();
+    console.log(
+      `Sending PDF as binary data, size: ${pdfBuffer.byteLength} bytes`
+    );
+
+    // Send the binary data directly
+    const conversionResponse = await fetch(`${BACKEND_URL}/convert`, {
+      method: "POST",
+      body: pdfBuffer,
+      headers: {
+        "Content-Type": "application/pdf",
+      },
+    });
+
+    if (!conversionResponse.ok) {
+      let errorDetails = "";
+      try {
+        const errorData = await conversionResponse.json();
+        errorDetails = errorData.error || JSON.stringify(errorData);
+      } catch (e) {
+        try {
+          errorDetails = await conversionResponse.text();
+        } catch (e2) {
+          errorDetails = "Could not parse error response";
+        }
+      }
+
+      throw new Error(`Binary conversion failed: ${errorDetails}`);
+    }
+
+    const html = await conversionResponse.text();
+    console.log(`Binary method successful, received ${html.length} characters`);
+    return html;
+  };
+
+  if (loading) {
+    return <div>Loading document...</div>;
+  }
 
   return (
     <div className="pdf-viewer-container">
-      <h2>PDF Viewer</h2>
+      {error ? (
+        <div className="error-container">
+          <div className="error-message">Error loading document: {error}</div>
+          <button onClick={tryAlternativeMethod} className="retry-button">
+            Try alternative method
+          </button>
 
-      <div className="pdf-input-options">
-        <div className="file-upload">
-          <h3>Upload PDF File</h3>
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={handleFileChange}
-          />
+          {debugInfo && (
+            <div className="debug-info">
+              <h4>Debug Information:</h4>
+              <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+            </div>
+          )}
         </div>
-
-        <div className="or-separator">OR</div>
-
-        <div className="url-input">
-          <h3>Load PDF from URL</h3>
-          <form onSubmit={handleUrlSubmit}>
-            <input
-              type="text"
-              value={pdfUrl}
-              onChange={(e) => setPdfUrl(e.target.value)}
-              placeholder="Enter PDF URL"
-            />
-            <button type="submit">Load</button>
-          </form>
-        </div>
-      </div>
-
-      {error && <div className="error-message">{error}</div>}
-
-      <div className="pdf-display">
-        {isLoading ? (
-          <div>Loading PDF...</div>
-        ) : (
-          <>
-            {renderPdf()}
-            {numPages && (
-              <div className="pdf-controls">
-                <button onClick={goToPrevPage} disabled={pageNumber <= 1}>
-                  Previous
-                </button>
-                <span>
-                  Page {pageNumber} of {numPages}
-                </span>
-                <button
-                  onClick={goToNextPage}
-                  disabled={pageNumber >= numPages}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      <style jsx>{`
-        .pdf-viewer-container {
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 20px;
-          font-family: Arial, sans-serif;
-        }
-
-        .pdf-input-options {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          margin-bottom: 20px;
-        }
-
-        .file-upload,
-        .url-input {
-          flex: 1;
-        }
-
-        .or-separator {
-          font-weight: bold;
-        }
-
-        input[type="file"],
-        input[type="text"] {
-          width: 100%;
-          padding: 8px;
-          margin-top: 5px;
-        }
-
-        button {
-          padding: 8px 16px;
-          background-color: #007bff;
-          color: white;
-          border: none;
-          cursor: pointer;
-          margin-left: 10px;
-        }
-
-        button:disabled {
-          background-color: #cccccc;
-          cursor: not-allowed;
-        }
-
-        .pdf-controls {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 20px;
-          margin-top: 10px;
-        }
-
-        .error-message {
-          color: red;
-          margin-bottom: 20px;
-        }
-
-        .pdf-display {
-          border: 1px solid #ddd;
-          min-height: 500px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-        }
-      `}</style>
+      ) : (
+        <div
+          className="pdf-content flex flex-col items-center justify-center"
+          dangerouslySetInnerHTML={{ __html: htmlContent }}
+        />
+      )}
     </div>
   );
 };
